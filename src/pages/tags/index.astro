@@ -2,23 +2,105 @@
 import { getCollection } from "astro:content";
 import Main from "@/layouts/Main.astro";
 import Layout from "@/layouts/Layout.astro";
-import Tag from "@/components/Tag.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
 import getUniqueTags from "@/utils/getUniqueTags";
+import getSortedPosts from "@/utils/getSortedPosts";
+import { getPath } from "@/utils/getPath";
+import { slugifyStr } from "@/utils/slugify";
 import { SITE } from "@/config";
+import IconHash from "@/assets/icons/IconHash.svg";
 
-const posts = await getCollection("blog");
+const allPosts = await getCollection("blog", ({ data }) => !data.draft);
+const tags = getUniqueTags(allPosts);
+const sortedPosts = getSortedPosts(allPosts);
 
-let tags = getUniqueTags(posts);
+const postsWithMeta = sortedPosts.map(post => ({
+  title: post.data.title,
+  description: post.data.description,
+  path: getPath(post.id, post.filePath),
+  tags: post.data.tags.map(t => slugifyStr(t)),
+  pubDatetime: post.data.pubDatetime.toISOString(),
+  modDatetime: post.data.modDatetime?.toISOString() ?? null,
+}));
 ---
 
 <Layout title={`Tags | ${SITE.title}`}>
   <Header />
-  <Main pageTitle="Tags" pageDesc="All the tags used in posts.">
-    <ul class="flex flex-wrap gap-6">
-      {tags.map(({ tag, tagName }) => <Tag {tag} {tagName} />)}
+  <Main pageTitle="Tags" pageDesc="Select tags to filter posts.">
+    <ul class="flex flex-wrap gap-4" id="tag-list">
+      {
+        tags.map(({ tag, tagName }) => (
+          <li>
+            <button
+              data-tag={tag}
+              class:list={[
+                "tag-btn flex items-center gap-0.5 cursor-pointer",
+                "border-b-2 border-dashed border-foreground text-lg",
+                "hover:border-accent hover:text-accent",
+              ]}
+            >
+              <IconHash class="size-5 opacity-80" />
+              {tagName}
+            </button>
+          </li>
+        ))
+      }
     </ul>
+
+    <ul id="post-list" class="mt-8 hidden">
+    </ul>
+
+    <p id="no-results" class="mt-8 italic opacity-70 hidden">No posts found for selected tags.</p>
   </Main>
   <Footer />
 </Layout>
+
+<script define:vars={{ postsWithMeta }}>
+  const selectedTags = new Set();
+  const tagBtns = document.querySelectorAll(".tag-btn");
+  const postList = document.getElementById("post-list");
+  const noResults = document.getElementById("no-results");
+
+  function renderPosts() {
+    const filtered =
+      selectedTags.size === 0
+        ? []
+        : postsWithMeta.filter(post =>
+            [...selectedTags].every(tag => post.tags.includes(tag))
+          );
+
+    postList.innerHTML = filtered
+      .map(
+        post => `
+        <li class="my-6">
+          <a
+            href="${post.path}"
+            class="inline-block text-lg font-medium text-accent decoration-dashed underline-offset-4 hover:underline"
+          >${post.title}</a>
+          <p class="text-sm opacity-80 mt-1">${post.description}</p>
+        </li>`
+      )
+      .join("");
+
+    const hasSelection = selectedTags.size > 0;
+    postList.classList.toggle("hidden", !hasSelection || filtered.length === 0);
+    noResults.classList.toggle("hidden", !hasSelection || filtered.length > 0);
+  }
+
+  tagBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tag = btn.dataset.tag;
+      if (selectedTags.has(tag)) {
+        selectedTags.delete(tag);
+        btn.classList.remove("border-accent", "text-accent");
+        btn.classList.add("border-foreground");
+      } else {
+        selectedTags.add(tag);
+        btn.classList.remove("border-foreground");
+        btn.classList.add("border-accent", "text-accent");
+      }
+      renderPosts();
+    });
+  });
+</script>

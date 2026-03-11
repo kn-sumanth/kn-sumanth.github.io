@@ -10,9 +10,24 @@ import Pagination from "@/components/Pagination.astro";
 import getSortedPosts from "@/utils/getSortedPosts";
 import { SITE } from "@/config";
 
+const allPosts = await getCollection("blog", ({ data }) => !data.draft);
+
+// Collect unique top-level directories from subdirectory posts
+const directories = [
+  ...new Set(
+    allPosts
+      .map(post => post.id.split("/")[0])
+      .filter(segment => allPosts.some(p => p.id.startsWith(segment + "/")))
+  ),
+].sort();
+
+// Only paginate top-level posts (not inside a subdirectory)
 export const getStaticPaths = (async ({ paginate }) => {
   const posts = await getCollection("blog", ({ data }) => !data.draft);
-  return paginate(getSortedPosts(posts), { pageSize: SITE.postPerPage });
+  const topLevelPosts = getSortedPosts(
+    posts.filter(post => !post.id.includes("/"))
+  );
+  return paginate(topLevelPosts, { pageSize: SITE.postPerPage });
 }) satisfies GetStaticPaths;
 
 const { page } = Astro.props;
@@ -21,6 +36,25 @@ const { page } = Astro.props;
 <Layout title={`Posts | ${SITE.title}`}>
   <Header />
   <Main pageTitle="Posts" pageDesc="All the articles I've posted.">
+    {
+      directories.length > 0 && (
+        <div class="mb-8">
+          <h2 class="mb-3 text-xl font-semibold tracking-wide">Topics</h2>
+          <ul class="flex flex-wrap gap-3">
+            {directories.map(dir => (
+              <li>
+                <a
+                  href={`/posts/${dir}/`}
+                  class="inline-block capitalize rounded border border-border px-4 py-2 text-accent decoration-dashed underline-offset-4 hover:underline"
+                >
+                  {dir}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
     <ul>
       {page.data.map(data => <Card {...data} />)}
     </ul>

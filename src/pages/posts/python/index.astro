@@ -1,0 +1,25 @@
+---
+import { getCollection } from "astro:content";
+import Main from "@/layouts/Main.astro";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Card from "@/components/Card.astro";
+import getSortedPosts from "@/utils/getSortedPosts";
+import { SITE } from "@/config";
+
+const allPosts = await getCollection("blog", ({ data }) => !data.draft);
+const pythonPosts = getSortedPosts(
+  allPosts.filter(post => post.id.startsWith("python/"))
+);
+---
+
+<Layout title={`Python | ${SITE.title}`}>
+  <Header />
+  <Main pageTitle="Python" pageDesc="Python notes and reference.">
+    <ul>
+      {pythonPosts.map(data => <Card {...data} />)}
+    </ul>
+  </Main>
+  <Footer />
+</Layout>
